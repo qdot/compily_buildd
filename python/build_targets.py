@@ -36,16 +36,15 @@ GENERATORS = {
                "^(?!windows_).*" : "Unix Makefiles"
                }
 
-EXTRAS = { ".*_mingw4_.*"          : "-DCMAKE_TOOLCHAIN_FILE=../../build_sys/cmake/toolchains/mingw_4_toolchain.cmake",
-           ".*_ppc_.*"             : "-DCMAKE_TOOLCHAIN_FILE=../../build_sys/cmake/toolchains/eldk_4.1_ppc-4xxFP_toolchain.cmake",
-           ".*10.5-gcc42_.*"       : "-DCMAKE_TOOLCHAIN_FILE=../../build_sys/cmake/toolchains/darwin_10.5_gcc42_toolchain.cmake",
+EXTRAS = { ".*_mingw4_.*"          : "-DCMAKE_TOOLCHAIN_FILE=../../compily_buildd/cmake/toolchains/mingw_4_toolchain.cmake",
+           ".*10.5-gcc42_.*"       : "-DCMAKE_TOOLCHAIN_FILE=../../compily_buildd/cmake/toolchains/darwin_10.5_gcc42_toolchain.cmake",
            "linux_debian.*_x86_.*" : "-DFORCE_32_BIT=TRUE",
            "^(?!windows_vs9).*_release_.*"         : "-DCMAKE_BUILD_TYPE=Release",
            "^(?!windows_vs9).*_debug_.*"           : "-DCMAKE_BUILD_TYPE=Debug",
            "^(?!windows_vs9).*_relwithdebinfo_.*"  : "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
-           "(?!windows_vs9).*_release_.*"         : "-DCMAKE_CONFIGURATION_TYPES=Release",
-           "(?!windows_vs9).*_debug_.*"           : "-DCMAKE_CONFIGURATION_TYPES=Debug",
-           "(?!windows_vs9).*_relwithdebinfo_.*"  : "-DCMAKE_CONFIGURATION_TYPES=RelWithDebInfo",
+           "(windows_vs9).*_release_.*"         : "-DCMAKE_CONFIGURATION_TYPES=Release",
+           "(windows_vs9).*_debug_.*"           : "-DCMAKE_CONFIGURATION_TYPES=Debug",
+           "(windows_vs9).*_relwithdebinfo_.*"  : "-DCMAKE_CONFIGURATION_TYPES=RelWithDebInfo",
            ".*_shared$"            : "-DBUILD_SHARED=ON -DBUILD_STATIC=OFF",
            ".*_static$"            : "-DBUILD_SHARED=OFF -DBUILD_STATIC=ON",
            ".*_shared_.*"          : "-DBUILD_SHARED=ON -DBUILD_STATIC=OFF",
