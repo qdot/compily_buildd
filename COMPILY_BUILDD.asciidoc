@@ -7,9 +7,9 @@ Version 1.0.0, August 30, 2009
 
 Compily Buildd is a compilation of python scripts and cmake functions that I've put together over a few years of building cross platform software, mainly of the driver/hardware interaction variety. It relies on cmake for all of the project generation, and python to do things like git version fetching, cmake command line creation, and other utilties that would be annoying if not impossible to do in cmake. 
 
-While the system is certainly helpful to anyone who needs to quickly build and cross-compile for multiple platforms out of the same source root, only the absolute minimal cmake portions are needed for building any Nonpolynomial Labs project. This build system also ships with every release of any NP Labs project.
+While the system is certainly helpful to anyone who needs to quickly build and cross-compile for multiple platforms out of the same source root, only the absolute minimal cmake portions are needed for building any Nonpolynomial Labs project. This build system ships with every release of any NP Labs project.
 
-The hope is that if someone really wants to use this system for their own build projects, they can, but otherwise it should stay small and lightweight enough to be shipped with NP Labs projects and stay out of the way otherwise.
+The hope is that if someone really wants to use this system for their own build projects, they can, but otherwise it should stay small and lightweight enough to be shipped with projects and stay out of the way otherwise. I can't really claim this documentation is complete, though it should at least be correct. But, if you've made it this far, you probably want to know more, so I'll shut up and get on with it.
 
 == Requirements ==
 
@@ -19,7 +19,7 @@ http://www.cmake.org
 
 === python (optional)  ===
 
-Used for build target creation, git version updates, etc... Not required for building projects with the system, but nice to have.
+Used for build target creation, git version updates, etc... Not required for building projects with the system, but nice to have if you plan to use this for development..
 
 http://www.python.org
 
@@ -53,6 +53,8 @@ Here's how I usually set up my build directories for multi project development
 |--- ... [one directory for all platforms I will need to compile with on this build directory]
 |-- [project name - each project root goes here, i.e. ...]
 |-- libnifalcon
+|--- build_darwin_10.5_x86_release_static (a Compily Buildd generated build directory)
+|--- build_windows_mingw4_x86_release_shared (another Compily Buildd generated build directory)
 |-- libtrancevibe
 |-- ...
 --------------------------------------
@@ -67,10 +69,19 @@ Build directories in a Compily Build system take on the following format
 build_[platform]_[build type]_[link type]_[other]
 --------------------------------------
 
-So, for instance, if you want to build a makefile based static release set of binaries and libraries on OS X 10.5 x86, you'd do a
+Where:
+
+- platform - The operating system and compiler to use, i.e. windows_vs9, windows_mingw4, darwin_10.5_gcc, darwin_10.5_xcode, etc... Yes, this is a meta layer on top of the generators for cmake, I realize :)
+- build type - Release, Debug, RelWithDebInfo, etc... Only one of these types per build directory
+- link type - Static or shared. Only one of these types per build directory
+- other - So far, only used for distcc.
+
+To set up all of these bindings are form the proper cmake line, there's a script in the python directory called compile_driver.py. It sounds like a wrestling move, and hopefully some day this build system will become so popular that there will be a build system themed pro wrestler who will use it as one. Yeah.
+
+So, for instance, if you want to build a makefile based static release set of binaries and libraries on OS X 10.5 on Intel and you have python installed, you'd do a
 
 --------------------------------------
-make darwin_10.5_x86_release_static
+../compily_buildd/python/compile_driver.py darwin_10.5_x86_release_static
 --------------------------------------
 
 and the build system would create the directory
@@ -102,6 +113,10 @@ Here's what the various parts of that mean:
 - ..
 -- We're actually in the build_..._static directory at this point, and the main CMakeLists.txt file will always be in the repo root. So, we specify that directory as the source directory for cmake to start in. This is known as an Out-Of-Source build, since none of the intermediate build files are created in the source tree, leaving it nice and clean, with easy cleanup (rm -rf build_* from the repo root).
 
+== The TargetBuilder object and support for additional IDEs ==
+
+Since Compily Buildd was put together with me in mind, the targets in TargetBuilder.py encompass only what I use for development, which is usually makefiles on mac/linux/mingw, and visual studio or nmake on windows. If you use another IDE, like Xcode, you can most likely just generate a makefile target, copy the cmake line used, and switch out the generator. The compile_driver script will print out the cmake line it generates, so it's easy to copy and paste, and target directories really only need to be recreated when large changes have been made that would invalidate the CMake Cache.
+
 == Compily Buildd Components ==
 
 === Cmake Scripts ===
@@ -116,7 +131,8 @@ The CMake portion of Compily Buildd consists of 3 main scripts:
 
 The python portion of Compily Buildd is mostly helper scripts:
 
-- build_targets.py - Puts together the cmake build line, as explained in the Target Forming section
+- TargetBuilder.py - Object that puts together the cmake build line, as explained in the Target Forming section
+- compile_driver.py - Finds the target builder module and passes the command line options to it.
 - get_version.py - Outputs a special C header file with get information, for compiling version and compile time information into binaries
 
 == Why is it called Compily Buildd? ==
