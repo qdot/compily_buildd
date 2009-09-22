@@ -47,7 +47,7 @@ else (LIBNIFALCON_LIBRARIES AND LIBNIFALCON_INCLUDE_DIRS)
 
   find_library(LIBNIFALCON_CLI_BASE_LIBRARY
     NAMES
-    nifalcon_clibase
+    nifalcon_cli_base
     PATHS
     /usr/lib
     /usr/local/lib
@@ -91,7 +91,7 @@ else (LIBNIFALCON_LIBRARIES AND LIBNIFALCON_INCLUDE_DIRS)
     if (NOT libnifalcon_FIND_QUIETLY)
       message(STATUS "Found libnifalcon")
 	  message(STATUS " - Includes: ${LIBNIFALCON_INCLUDE_DIRS}")
-	  message(STATUS " - Libraries: ${LIBNIFALCON_LIBRARIES}")
+	  message(STATUS " - Libraries: ${LIBNIFALCON_LIBRARIES} ${LIBNIFALCON_CLI_BASE_LIBARY} ${LIBNIFALCON_DEVICE_BOOST_THREAD_LIBARY}")
     endif (NOT libnifalcon_FIND_QUIETLY)
   else (LIBNIFALCON_FOUND)
     if (libnifalcon_FIND_REQUIRED)
