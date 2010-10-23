@@ -49,113 +49,281 @@ MACRO(SET_COMPILE_FLAGS TARGET)
   SET_TARGET_PROPERTIES(${TARGET} PROPERTIES COMPILE_FLAGS "${FLAGS}")
 ENDMACRO(SET_COMPILE_FLAGS)
 
+MACRO(SET_LINK_FLAGS TARGET)
+  SET(FLAGS)
+  FOREACH(flag ${ARGN})
+    SET(FLAGS "${FLAGS} ${flag}")
+  ENDFOREACH(flag)
+  SET_TARGET_PROPERTIES(${TARGET} PROPERTIES LINK_FLAGS "${FLAGS}")
+ENDMACRO(SET_LINK_FLAGS)
+
 ######################################################################################
 # Generalized library building function for all C++ libraries
 ######################################################################################
 
+# Function for building libraries
+#
+# All arguments are prefixed with BUILDSYS_LIB in the function
+#
+# Arguments
+# NAME - name of the library
+# SOURCES - list of sources to compile into library
+# CXX_FLAGS - flags to pass to the compiler
+# LINK_LIBS - libraries to link library to (dynamic libs only)
+# LINK_FLAGS - list of flags to use in linking (dynamic libs only)
+# DEPENDS - Targets that should be built before this target
+# LIB_TYPES_OVERRIDE - override the global types as set by OPTION_BUILD_STATIC/SHARED
+# SHOULD_INSTALL - should install commands be generated for this target?
+# VERSION - version number for library naming (non-windows dynamic libs only)
+# GROUP - Name of the compilation group this should be a part of (so you can build all of a group at once as a target)
+# EXCLUDE_FROM_ALL - Don't add as part of all target
+#
+# When finished, multiple targets are created
+# 
+# - A target for building the library
+# -- [NAME]_[BUILD_TYPE] - i.e. for a static libfoo, there'd be a foo_STATIC target
+# - A target for setting dependencies on all versions of the library being built
+# -- [NAME]_DEPEND - i.e. foo_DEPEND, which will clear once foo_STATIC/SHARED is built
+#
+
 FUNCTION(BUILDSYS_BUILD_LIB)
+
+  # Parse out the arguments
   PARSE_ARGUMENTS(BUILDSYS_LIB
-    "NAME;SOURCES;CXX_FLAGS;LINK_LIBS;LINK_FLAGS;DEPENDS;LIB_TYPES_OVERRIDE;SHOULD_INSTALL;VERSION"
+    "NAME;SOURCES;CXX_FLAGS;LINK_LIBS;LINK_FLAGS;DEPENDS;LIB_TYPES_OVERRIDE;SHOULD_INSTALL;VERSION;GROUP;EXCLUDE_FROM_ALL;"
     ""
     ${ARGN}
     )
+
+  # Set up the types of library we want to build (STATIC, DYNAMIC, both)
   IF(BUILDSYS_LIB_LIB_TYPES_OVERRIDE)
 	SET(BUILDSYS_LIB_TYPES_LIST ${BUILDSYS_LIB_LIB_TYPES_OVERRIDE})
-  ELSE(BUILDSYS_LIB_LIB_TYPES_OVERRIDE)
+  ELSE()
 	SET(BUILDSYS_LIB_TYPES_LIST ${BUILDSYS_LIB_TYPES})
-  ENDIF(BUILDSYS_LIB_LIB_TYPES_OVERRIDE)
+  ENDIF()
 
+  # Remove all dupes from the source list, otherwise CMake freaks out
   LIST(REMOVE_DUPLICATES BUILDSYS_LIB_SOURCES)
 
+  # Build each library type
   FOREACH(LIB_TYPE ${BUILDSYS_LIB_TYPES_LIST})
+    # Setup library name, targets, properties, etc...
     SET(CURRENT_LIB ${BUILDSYS_LIB_NAME}_${LIB_TYPE})
-    ADD_LIBRARY (${CURRENT_LIB} ${LIB_TYPE} ${BUILDSYS_LIB_SOURCES})
+
+    # To make sure we name our target correctly, but still link against the correct type
+    IF(LIB_TYPE STREQUAL "FRAMEWORK")
+      SET(TARGET_LIB_TYPE "SHARED")
+    ELSE()
+      SET(TARGET_LIB_TYPE ${LIB_TYPE})
+    ENDIF()
+
+    IF(BUILDSYS_LIB_EXCLUDE_FROM_ALL)
+      ADD_LIBRARY (${CURRENT_LIB} EXCLUDE_FROM_ALL ${TARGET_LIB_TYPE} ${BUILDSYS_LIB_SOURCES})
+    ELSE()
+      ADD_LIBRARY (${CURRENT_LIB} ${TARGET_LIB_TYPE} ${BUILDSYS_LIB_SOURCES})      
+    ENDIF()
+
+    # Add this library to the list of all libraries we're building
     LIST(APPEND LIB_DEPEND_LIST ${CURRENT_LIB})
+
+    # This allows use to build static/shared libraries of the same name.
+    # See http://www.itk.org/Wiki/CMake_FAQ#How_do_I_make_my_shared_and_static_libraries_have_the_same_root_name.2C_but_different_suffixes.3F
     SET_TARGET_PROPERTIES (${CURRENT_LIB} PROPERTIES OUTPUT_NAME ${BUILDSYS_LIB_NAME})
     SET_TARGET_PROPERTIES (${CURRENT_LIB} PROPERTIES CLEAN_DIRECT_OUTPUT 1)
-    SET_TARGET_PROPERTIES (${CURRENT_LIB} PROPERTIES SOVERSION ${BUILDSYS_LIB_VERSION})
-    SET_TARGET_PROPERTIES (${CURRENT_LIB} PROPERTIES VERSION ${BUILDSYS_LIB_VERSION})
 
-    #optional arguments
+    # Add version, if we're given one
+    IF(BUILDSYS_LIB_VERSION)
+      SET_TARGET_PROPERTIES (${CURRENT_LIB} PROPERTIES SOVERSION ${BUILDSYS_LIB_VERSION})
+      SET_TARGET_PROPERTIES (${CURRENT_LIB} PROPERTIES VERSION ${BUILDSYS_LIB_VERSION})
+    ENDIF()
+
+    IF(LIB_TYPE STREQUAL "FRAMEWORK")
+      SET_TARGET_PROPERTIES (${CURRENT_LIB} PROPERTIES FRAMEWORK 1)
+      # As far as I can find, even in CMake 2.8.2, there's no way to
+      # explictly copy header directories. This makes me sad.
+      GET_TARGET_PROPERTY(OUT_LIB ${CURRENT_LIB} LOCATION)
+      GET_FILENAME_COMPONENT(OUT_DIR ${OUT_LIB} PATH)
+      MESSAGE(STATUS ${OUT_DIR})
+      ADD_CUSTOM_TARGET(${CURRENT_LIB}_FRAMEWORK_HEADER_COPY
+        COMMAND "${CMAKE_COMMAND}" "-E" "make_directory" "${OUT_DIR}/Headers"
+        COMMAND "${CMAKE_COMMAND}" "-E" "copy_directory" "${CMAKE_SOURCE_DIR}/include" "${OUT_DIR}/Headers"
+        COMMAND "${CMAKE_COMMAND}" "-E" "create_symlink" "Versions/Current/Headers" "${OUT_DIR}/../../Headers")
+      ADD_DEPENDENCIES(${CURRENT_LIB} ${CURRENT_LIB}_FRAMEWORK_HEADER_COPY)
+    ENDIF()
+
+    # Libraries we should link again
     IF(BUILDSYS_LIB_LINK_LIBS)
 	  TARGET_LINK_LIBRARIES(${CURRENT_LIB} ${BUILDSYS_LIB_LINK_LIBS})
-    ENDIF(BUILDSYS_LIB_LINK_LIBS)
+    ENDIF()
 
-    #cpp defines
+    # Defines and compiler flags, if any
     IF(BUILDSYS_LIB_CXX_FLAGS)
       SET_COMPILE_FLAGS(${CURRENT_LIB} ${BUILDSYS_LIB_CXX_FLAGS})
-    ENDIF(BUILDSYS_LIB_CXX_FLAGS)
+    ENDIF()
 
+    # Linker flags, if any
     IF(BUILDSYS_LIB_LINK_FLAGS)
-      SET_TARGET_PROPERTIES(${CURRENT_LIB} PROPERTIES LINK_FLAGS ${BUILDSYS_LIB_LINK_FLAGS})
-    ENDIF(BUILDSYS_LIB_LINK_FLAGS)
+      SET_LINK_FLAGS(${CURRENT_LIB} ${BUILDSYS_LIB_LINK_FLAGS})
+    ENDIF()
 
-    #installation for non-windows platforms
-    IF(BUILDSYS_LIB_SHOULD_INSTALL)
-      INSTALL(TARGETS ${CURRENT_LIB} LIBRARY DESTINATION ${LIBRARY_INSTALL_DIR} ARCHIVE DESTINATION ${LIBRARY_INSTALL_DIR})
-    ENDIF(BUILDSYS_LIB_SHOULD_INSTALL)
+    # Installation commands
+    IF(BUILDSYS_LIB_SHOULD_INSTALL AND NOT BUILDSYS_LIB_EXCLUDE_FROM_ALL)
+      INSTALL(TARGETS ${CURRENT_LIB} LIBRARY DESTINATION ${LIBRARY_INSTALL_DIR} ARCHIVE DESTINATION ${LIBRARY_INSTALL_DIR} FRAMEWORK DESTINATION ${FRAMEWORK_INSTALL_DIR})
+    ELSEIF(BUILDSYS_LIB_SHOULD_INSTALL AND BUILDSYS_LIB_EXCLUDE_FROM_ALL)
+      # Only install the output file if it exists. This doesn't work for targets under exclude from all, but we may build them anyways
+      MESSAGE(STATUS "NOTE: Target ${BUILDSYS_LIB_NAME} will only be installed after target is specifically built (not build using all target)")
+      GET_TARGET_PROPERTY(LIB_OUTPUT_NAME ${CURRENT_LIB} LOCATION)
+      INSTALL(FILES ${LIB_OUTPUT_NAME} LIBRARY DESTINATION ${LIBRARY_INSTALL_DIR} ARCHIVE DESTINATION ${LIBRARY_INSTALL_DIR} OPTIONAL)
+    ENDIF()
 
-    #rewrite of install_name_dir in apple binaries
+    # Rewrite of install_name_dir in apple binaries
     IF(APPLE)
       SET_TARGET_PROPERTIES(${CURRENT_LIB} PROPERTIES INSTALL_NAME_DIR ${LIBRARY_INSTALL_DIR})
-    ENDIF(APPLE)
+    ENDIF()
 
-    #We don't want our libraries built off in configuration type directories, and since
-    #we take care of out of source configuration placement with the last command, we
-    #don't need to worry about stomping on our own libs (i.e. only one type will be built
-    #per project)
-    IF(MSVC AND NOT NMAKE)
-      SET_TARGET_PROPERTIES(${CURRENT_LIB} PROPERTIES PREFIX "../")
-    ENDIF(MSVC AND NOT NMAKE)
+    # All targets should depend on the REQUIRED_DEPENDENCIES_TARGET as set up in 
+    # INITIALIZE_PROJECT, so that distcc and dependency building works in order
+    ADD_DEPENDENCIES(${CURRENT_LIB} REQUIRED_DEPENDENCIES_TARGET)
 
+    # If the library depends on anything, set up dependency
     IF(BUILDSYS_LIB_DEPENDS)
       ADD_DEPENDENCIES(${CURRENT_LIB} ${BUILDSYS_LIB_DEPENDS})
-    ENDIF(BUILDSYS_LIB_DEPENDS)
-  ENDFOREACH(LIB_TYPE)
+    ENDIF()
+
+  ENDFOREACH()
+
+  # Build the dependency name for ourselves and set up the target for it
   SET(DEPEND_NAME "${BUILDSYS_LIB_NAME}_DEPEND")
   ADD_CUSTOM_TARGET(${DEPEND_NAME} DEPENDS ${LIB_DEPEND_LIST})
-  
-ENDFUNCTION(BUILDSYS_BUILD_LIB)
+
+  IF(BUILDSYS_LIB_GROUP)
+    IF(NOT TARGET ${BUILDSYS_LIB_GROUP})
+      MESSAGE(STATUS "Creating build group ${BUILDSYS_LIB_GROUP}")
+      ADD_CUSTOM_TARGET(${BUILDSYS_LIB_GROUP} DEPENDS ${DEPEND_NAME})
+    ELSE()
+      ADD_DEPENDENCIES(${BUILDSYS_LIB_GROUP} ${DEPEND_NAME})
+    ENDIF()
+  ENDIF()
+
+ENDFUNCTION()
 
 ######################################################################################
 # Generalized executable building function
 ######################################################################################
 
+# Function for building executables
+#
+# All arguments are prefixed with BUILDSYS_EXE in the function
+#
+# Arguments
+# NAME - name of the executable
+# SOURCES - list of sources to compile into executable
+# CXX_FLAGS - flags to pass to the compiler
+# LINK_LIBS - libraries to link executable to
+# LINK_FLAGS - list of flags to use in linking
+# DEPENDS - Targets that should be built before this target
+# SHOULD_INSTALL - should install commands be generated for this target?
+# GROUP - Name of the compilation group this should be a part of (so you can build all of a group at once as a target)
+# EXCLUDE_FROM_ALL - Don't add as part of all target
+# INSTALL_PDB - On windows, if this is true, always create and install a PDB. Will also always happen with BUILDSYS_GLOBAL_INSTALL_PDB is on.
+#
+# When finished, one target is created, which is the NAME argument
+# 
+
 FUNCTION(BUILDSYS_BUILD_EXE)
   PARSE_ARGUMENTS(BUILDSYS_EXE
-    "NAME;SOURCES;CXX_FLAGS;LINK_LIBS;LINK_FLAGS;DEPENDS;SHOULD_INSTALL"
+    "NAME;SOURCES;CXX_FLAGS;LINK_LIBS;LINK_FLAGS;DEPENDS;SHOULD_INSTALL;GROUP;EXCLUDE_FROM_ALL;INSTALL_PDB;"
     ""
     ${ARGN}
     )
-  
+
+  # Remove all dupes from the source list, otherwise CMake freaks out
   LIST(REMOVE_DUPLICATES BUILDSYS_EXE_SOURCES)
 
-  ADD_EXECUTABLE(${BUILDSYS_EXE_NAME} ${BUILDSYS_EXE_SOURCES})
+  # Create the target
+  IF(BUILDSYS_EXE_EXCLUDE_FROM_ALL)
+    ADD_EXECUTABLE(${BUILDSYS_EXE_NAME} EXCLUDE_FROM_ALL ${BUILDSYS_EXE_SOURCES})
+  ELSE()
+    ADD_EXECUTABLE(${BUILDSYS_EXE_NAME} ${BUILDSYS_EXE_SOURCES})
+  ENDIF()
   SET_TARGET_PROPERTIES (${BUILDSYS_EXE_NAME} PROPERTIES OUTPUT_NAME ${BUILDSYS_EXE_NAME})
 
+  # Defines and compiler flags, if any
   IF(BUILDSYS_EXE_CXX_FLAGS)
     SET_COMPILE_FLAGS(${BUILDSYS_EXE_NAME} ${BUILDSYS_EXE_CXX_FLAGS})
-  ENDIF(BUILDSYS_EXE_CXX_FLAGS)
+  ENDIF()
 
-  IF(BUILDSYS_EXE_LINK_FLAGS)
-    SET_TARGET_PROPERTIES(${BUILDSYS_EXE_NAME} PROPERTIES LINK_FLAGS ${BUILDSYS_EXE_LINK_FLAGS})
-  ENDIF(BUILDSYS_EXE_LINK_FLAGS)
+  # Set up rpaths to look in a few different places for libraries
+  # - . (cwd)
+  # - @loader_path/. (NOTE: @loader_path with no following path seems to fail)
+  # - All of the library paths we linked again
+
+  IF(NOT BUILDSYS_EXE_LINK_FLAGS)
+    SET(BUILDSYS_EXE_LINK_FLAGS)
+  ENDIF()
+
+  IF(APPLE)   
+    # The three normal paths
+    # Right next to us, in the path of the requesting binary, and @loader_path/../Frameworks (the bundle packing Frameworks version)
+    LIST(APPEND BUILDSYS_EXE_LINK_FLAGS "-Wl,-rpath,@loader_path/." "-Wl,-rpath,@loader_path/../Frameworks" "-Wl,-rpath,.")
+    IF(BUILDSYS_DEP_PATHS)
+      FOREACH(PATH ${BUILDSYS_DEP_PATHS})
+        LIST(APPEND BUILDSYS_EXE_LINK_FLAGS "-Wl,-rpath,${PATH}/lib")
+      ENDFOREACH()
+    ENDIF()
+  ENDIF()
+
+  # If we're using Visual Studio, see whether or not we should
+  # generate and install PDB files, even if we're in release
+  IF(MSVC)
+    IF(BUILDSYS_GLOBAL_INSTALL_PDB OR BUILDSYS_EXE_INSTALL_PDB)
+      LIST(APPEND BUILDSYS_EXE_LINK_FLAGS "/DEBUG")
+      GET_TARGET_PROPERTY(EXE_OUTPUT_NAME ${BUILDSYS_EXE_NAME} LOCATION)
+      # Strip the .exe off the end and replace with .pdb
+      STRING(REGEX REPLACE ".exe$" ".pdb" PDB_OUTPUT_NAME ${EXE_OUTPUT_NAME})
+      STRING(REGEX REPLACE "\\$\\(OutDir\\)" "" PDB_OUTPUT_NAME ${PDB_OUTPUT_NAME})
+      INSTALL(FILES ${PDB_OUTPUT_NAME} DESTINATION ${SYMBOL_INSTALL_DIR} OPTIONAL)
+    ENDIF()
+  ENDIF()
   
+  # Linker flags, if any
+  IF(BUILDSYS_EXE_LINK_FLAGS)
+    SET_LINK_FLAGS(${BUILDSYS_EXE_NAME} ${BUILDSYS_EXE_LINK_FLAGS})
+  ENDIF()
+  
+  # Libraries to link to 
   IF(BUILDSYS_EXE_LINK_LIBS)
     TARGET_LINK_LIBRARIES(${BUILDSYS_EXE_NAME} ${BUILDSYS_EXE_LINK_LIBS})
-  ENDIF(BUILDSYS_EXE_LINK_LIBS)
+  ENDIF()
 
-  IF(BUILDSYS_EXE_SHOULD_INSTALL)
+  # Install commands
+  IF(BUILDSYS_EXE_SHOULD_INSTALL AND NOT BUILDSYS_EXE_EXCLUDE_FROM_ALL)
     INSTALL(TARGETS ${BUILDSYS_EXE_NAME} RUNTIME DESTINATION ${RUNTIME_INSTALL_DIR})
-  ENDIF(BUILDSYS_EXE_SHOULD_INSTALL)
+  ELSEIF(BUILDSYS_EXE_SHOULD_INSTALL AND BUILDSYS_EXE_EXCLUDE_FROM_ALL)
+    # Only install the output file if it exists. This doesn't work for targets under exclude from all, but we may build them anyways
+    MESSAGE(STATUS "NOTE: Target ${BUILDSYS_EXE_NAME} will only be installed after target is specifically built (not build using all target)")
+    GET_TARGET_PROPERTY(EXE_OUTPUT_NAME ${BUILDSYS_EXE_NAME} LOCATION)
+    INSTALL(FILES ${EXE_OUTPUT_NAME} RUNTIME DESTINATION ${RUNTIME_INSTALL_DIR} OPTIONAL)
+  ENDIF()
 
-  IF(MSVC AND NOT NMAKE)
-    SET_TARGET_PROPERTIES(${CURRENT_LIB} PROPERTIES PREFIX "../")
-  ENDIF(MSVC AND NOT NMAKE)
+  # All targets should depend on the REQUIRED_DEPENDENCIES_TARGET as set up in 
+  # INITIALIZE_PROJECT, so that distcc and dependency building works in order
+  ADD_DEPENDENCIES(${BUILDSYS_EXE_NAME} REQUIRED_DEPENDENCIES_TARGET)
 
+  # If the executable depends on anything, set up dependency
   IF(BUILDSYS_EXE_DEPENDS)
     ADD_DEPENDENCIES(${BUILDSYS_EXE_NAME} ${BUILDSYS_EXE_DEPENDS})
-  ENDIF(BUILDSYS_EXE_DEPENDS)
+  ENDIF()
+
+  IF(BUILDSYS_EXE_GROUP)
+    IF(NOT TARGET ${BUILDSYS_EXE_GROUP})
+      MESSAGE(STATUS "Creating build group ${BUILDSYS_EXE_GROUP}")
+      ADD_CUSTOM_TARGET(${BUILDSYS_EXE_GROUP} DEPENDS ${BUILDSYS_EXE_NAME})
+    ELSE()
+      ADD_DEPENDENCIES(${BUILDSYS_EXE_GROUP} ${BUILDSYS_EXE_NAME})
+    ENDIF()
+  ENDIF()
+
 ENDFUNCTION(BUILDSYS_BUILD_EXE)
 
 ######################################################################################
@@ -174,8 +342,8 @@ MACRO(MACRO_ENSURE_OUT_OF_SOURCE_BUILD)
       "A script (Makefile or python) should've been included in your build to generate this, check your project root directory.\n"
       "If you get this error from a sub-directory, make sure there is not a CMakeCache.txt in your project root directory."
       )
-  ENDIF(insource OR insourcesubdir)
-ENDMACRO(MACRO_ENSURE_OUT_OF_SOURCE_BUILD)
+  ENDIF()
+ENDMACRO()
 
 ######################################################################################
 # Create a library name that fits our platform
@@ -196,76 +364,6 @@ MACRO(CREATE_LIBRARY_LINK_NAME LIBNAME)
     SET(LIB_STATIC_EXT)
     SET(LIB_OUTPUT_PATH)
   ENDIF(BUILD_STATIC AND NOT BUILD_SHARED)
-  SET(lib${LIBNAME}_LIBRARY ${LIB_OUTPUT_PATH}${LIB_STATIC_PRE}${LIBNAME}${LIB_STATIC_EXT})
-
-  
+  SET(lib${LIBNAME}_LIBRARY ${LIB_OUTPUT_PATH}${LIB_STATIC_PRE}${LIBNAME}${LIB_STATIC_EXT})  
 ENDMACRO(CREATE_LIBRARY_LINK_NAME)
-
-######################################################################################
-# Our own LAPACK finder
-######################################################################################
-
-#Cmake tries to find lapack/blas using fortran, which, while sane, is annoying. This
-#macro bypasses that and assumes we've got lapack and blas set up in a certain way.
-
-MACRO(FIND_PLATFORM_LAPACK)
-  IF(APPLE AND ACCELERATE_FRAMEWORK)
-    #On OS X, Accelerate ships with the platform
-    SET(LAPACK_LIBRARIES ${ACCELERATE_LIBRARY})
-  ELSEIF(MINGW)
-    #On MinGW, we usually have gfortran, so use the regular find
-    ENABLE_LANGUAGE(Fortran)
-    SET(BLA_STATIC ON)
-    FIND_PACKAGE(LAPACK REQUIRED)
-    LIST(APPEND LAPACK_LIBRARIES gfortran)
-  ELSEIF(MSVC)
-    #On MSVC, we use a found blas/lapack
-    #Gotten at http://www.stanford.edu/~vkl/code/libs.html
-    SET(LAPACK_LIBRARIES blas_win32 lapack_win32)
-  ELSE(APPLE AND ACCELERATE_FRAMEWORK)
-    #*NIX. Set and pray.
-    SET(LAPACK_LIBRARIES blas lapack)
-  ENDIF(APPLE AND ACCELERATE_FRAMEWORK)
-ENDMACRO(FIND_PLATFORM_LAPACK)
-
-######################################################################################
-# CPack Source Distro Setup
-######################################################################################
-
-MACRO(BUILDSYS_CPACK_INFO)
-  PARSE_ARGUMENTS(BUILDSYS_CPACK
-    "NAME;MAJOR_VERSION;MINOR_VERSION;BUILD_VERSION;VENDOR;DESCRIPTION"
-    ""
-    ${ARGN}
-    )
-  
-  # CPack version numbers for release tarball name.
-  SET(CPACK_PACKAGE_VERSION_MAJOR ${BUILDSYS_CPACK_MAJOR_VERSION})
-  SET(CPACK_PACKAGE_VERSION_MINOR ${BUILDSYS_CPACK_MINOR_VERSION})
-  SET(CPACK_PACKAGE_VERSION_PATCH ${BUILDSYS_CPACK_BUILD_VERSION})
-  
-  SET(CPACK_PACKAGE_DESCRIPTION_SUMMARY ${BUILDSYS_CPACK_DESCRIPTION})
-  SET(CPACK_PACKAGE_VENDOR ${BUILDSYS_CPACK_VENDOR})
-  #We'll always have a description file handy as README
-  SET(CPACK_PACKAGE_DESCRIPTION_FILE ${CMAKE_CURRENT_SOURCE_DIR}/README.txt)
-  SET(CPACK_GENERATOR TGZ)
-  SET(BUILDSYS_CPACK_VERSION ${BUILDSYS_CPACK_MAJOR_VERSION}.${BUILDSYS_CPACK_MINOR_VERSION}.${BUILDSYS_CPACK_BUILD_VERSION})
-  SET(BUILDSYS_CPACK_NAME ${BUILDSYS_CPACK_NAME})
-
-  BUILDSYS_CPACK_SOURCE_DISTRO()
-ENDMACRO(BUILDSYS_CPACK_INFO)
-
-MACRO(BUILDSYS_CPACK_SOURCE_DISTRO)
-  set(
-    CPACK_SOURCE_PACKAGE_FILE_NAME "${BUILDSYS_CPACK_NAME}-${BUILDSYS_CPACK_VERSION}-src"
-    CACHE INTERNAL "${BUILDSYS_CPACK_NAME} Source Distribution"
-    )
-  set(CPACK_SOURCE_GENERATOR "TGZ;ZIP")
-  set(CPACK_SOURCE_IGNORE_FILES
-    "~$"
-    "^${PROJECT_SOURCE_DIR}/boneyard/"
-    "^${PROJECT_SOURCE_DIR}/.git.*"
-    "^${PROJECT_SOURCE_DIR}/build.*"
-    )
-ENDMACRO(BUILDSYS_CPACK_SOURCE_DISTRO)
 
