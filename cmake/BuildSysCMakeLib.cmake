@@ -38,7 +38,9 @@ MACRO(INITIALIZE_BUILD)
   ENDIF()
 
   # Make sure our prefix_dir is in cmake format
-  FILE(TO_CMAKE_PATH ${PREFIX_DIR} PREFIX_DIR)
+  IF(PREFIX_DIR)    
+    FILE(TO_CMAKE_PATH ${PREFIX_DIR} PREFIX_DIR)
+  ENDIF()
   
   # Set up defaults to look like "usr" format. We want all of our
   # projects in this layout.
