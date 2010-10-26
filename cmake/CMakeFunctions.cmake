@@ -181,9 +181,6 @@ FUNCTION(BUILDSYS_BUILD_LIB)
       SET_TARGET_PROPERTIES(${CURRENT_LIB} PROPERTIES INSTALL_NAME_DIR ${LIBRARY_INSTALL_DIR})
     ENDIF()
 
-    # All targets should depend on the REQUIRED_DEPENDENCIES_TARGET as set up in 
-    # INITIALIZE_PROJECT, so that distcc and dependency building works in order
-    ADD_DEPENDENCIES(${CURRENT_LIB} REQUIRED_DEPENDENCIES_TARGET)
 
     # If the library depends on anything, set up dependency
     IF(BUILDSYS_LIB_DEPENDS)
@@ -306,9 +303,6 @@ FUNCTION(BUILDSYS_BUILD_EXE)
     INSTALL(FILES ${EXE_OUTPUT_NAME} RUNTIME DESTINATION ${RUNTIME_INSTALL_DIR} OPTIONAL)
   ENDIF()
 
-  # All targets should depend on the REQUIRED_DEPENDENCIES_TARGET as set up in 
-  # INITIALIZE_PROJECT, so that distcc and dependency building works in order
-  ADD_DEPENDENCIES(${BUILDSYS_EXE_NAME} REQUIRED_DEPENDENCIES_TARGET)
 
   # If the executable depends on anything, set up dependency
   IF(BUILDSYS_EXE_DEPENDS)
