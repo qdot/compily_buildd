@@ -37,11 +37,10 @@ MACRO(INITIALIZE_BUILD)
     ENDIF()
   ENDIF()
 
-  # Make sure our prefix_dir is in cmake format
-  IF(PREFIX_DIR)    
-    FILE(TO_CMAKE_PATH ${PREFIX_DIR} PREFIX_DIR)
+  IF(CMAKE_INSTALL_PREFIX)
+    MESSAGE(STATUS "Installation Prefix: ${CMAKE_INSTALL_PREFIX}")
   ENDIF()
-  
+
   # Set up defaults to look like "usr" format. We want all of our
   # projects in this layout.
   IF(NOT INCLUDE_INSTALL_DIR)
@@ -54,27 +53,22 @@ MACRO(INITIALIZE_BUILD)
     SET(RUNTIME_INSTALL_DIR bin)
   ENDIF()
   IF(NOT SYMBOL_INSTALL_DIR)
-    SET(SYMBOL_INSTALL_DIR ${CMAKE_INSTALL_PREFIX}/debug)
+    SET(SYMBOL_INSTALL_DIR debug)
   ENDIF()
   IF(NOT DOC_INSTALL_DIR)
-    SET(DOC_INSTALL_DIR ${CMAKE_INSTALL_PREFIX}/doc)
+    SET(DOC_INSTALL_DIR doc)
   ENDIF()
   IF(NOT FRAMEWORK_INSTALL_DIR)
-    SET(FRAMEWORK_INSTALL_DIR ${CMAKE_INSTALL_PREFIX}/frameworks)
+    SET(FRAMEWORK_INSTALL_DIR frameworks)
   ENDIF()
   IF(NOT CMAKE_MODULES_INSTALL_DIR)
-    SET(CMAKE_MODULES_INSTALL_DIR ${CMAKE_INSTALL_PREFIX}/cmake_modules)
+    SET(CMAKE_MODULES_INSTALL_DIR cmake_modules)
   ENDIF()
 
   # We always want to output our binaries and libraries to the same place, set that here
   SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
   SET(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
   SET(DOC_OUTPUT_PATH ${CMAKE_BINARY_DIR}/doc)
-
-  MESSAGE(STATUS "Install Directory Prefix: ${CMAKE_INSTALL_PREFIX}")
-  MESSAGE(STATUS "Include Install Directory: ${INCLUDE_INSTALL_DIR}")
-  MESSAGE(STATUS "Library Install Directory: ${LIBRARY_INSTALL_DIR}")
-  MESSAGE(STATUS "Runtime Install Directory: ${RUNTIME_INSTALL_DIR}")
 
   #Always assume we want to build threadsafe mingw binaries
   IF(MINGW)
