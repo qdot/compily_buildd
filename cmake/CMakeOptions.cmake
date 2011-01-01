@@ -13,6 +13,16 @@ MACRO(OPTION_LIBRARY_BUILD_STATIC DEFAULT)
   ENDIF()
 ENDMACRO()
 
+MACRO(OPTION_USE_STATIC_SUFFIX DEFAULT)
+  OPTION(USE_STATIC_SUFFIX "If building static libraries, suffix their name with _s. Handy on windows when building both." ${DEFAULT})
+
+  IF(USE_STATIC_SUFFIX)
+	MESSAGE(STATUS "Building Static Libraries with suffix '_s'")
+  ELSE()
+  	MESSAGE(STATUS "Building Static Libraries with same name as shared (may cause issues on windows)")
+  ENDIF()
+ENDMACRO()
+
 MACRO(OPTION_LIBRARY_BUILD_SHARED DEFAULT)
   OPTION(BUILD_SHARED "Build shared libraries" ${DEFAULT})
 

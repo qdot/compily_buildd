@@ -128,7 +128,11 @@ FUNCTION(BUILDSYS_BUILD_LIB)
 
     # This allows use to build static/shared libraries of the same name.
     # See http://www.itk.org/Wiki/CMake_FAQ#How_do_I_make_my_shared_and_static_libraries_have_the_same_root_name.2C_but_different_suffixes.3F
-    SET_TARGET_PROPERTIES (${CURRENT_LIB} PROPERTIES OUTPUT_NAME ${BUILDSYS_LIB_NAME})
+	IF(USE_STATIC_SUFFIX AND LIB_TYPE STREQUAL "STATIC")
+      SET_TARGET_PROPERTIES (${CURRENT_LIB} PROPERTIES OUTPUT_NAME ${BUILDSYS_LIB_NAME}_s)
+	ELSE()
+      SET_TARGET_PROPERTIES (${CURRENT_LIB} PROPERTIES OUTPUT_NAME ${BUILDSYS_LIB_NAME})	  
+	ENDIF()
     SET_TARGET_PROPERTIES (${CURRENT_LIB} PROPERTIES CLEAN_DIRECT_OUTPUT 1)
 
     # Add version, if we're given one
