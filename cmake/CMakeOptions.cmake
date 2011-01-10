@@ -192,3 +192,17 @@ MACRO(OPTION_FORCE_32_BIT DEFAULT)
 	MESSAGE(STATUS "Force 32 bit NOT AVAILABLE - Already on a 32 bit platform")
   ENDIF()
 ENDMACRO()
+
+MACRO(OPTION_UNINSTALL_TARGET DEFAULT)
+  OPTION(UNINSTALL_TARGET "Generates a target to allow uninstallation. Useful for testing." ${DEFAULT})
+  IF(UNINSTALL_TARGET)
+    # uninstall target
+    configure_file(
+      "${BUILDSYS_CMAKE_DIR}/cmake_uninstall.cmake.in"
+      "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
+      IMMEDIATE @ONLY)
+    
+    add_custom_target(uninstall
+      COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
+  ENDIF()
+ENDMACRO()
