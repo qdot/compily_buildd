@@ -198,7 +198,7 @@ MACRO(OPTION_UNINSTALL_TARGET DEFAULT)
   IF(UNINSTALL_TARGET)
     # uninstall target
     configure_file(
-      "${BUILDSYS_CMAKE_DIR}/cmake_uninstall.cmake.in"
+      "${BUILDSYS_CMAKE_DIR}/templates/cmake_uninstall.cmake.in"
       "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
       IMMEDIATE @ONLY)
     
